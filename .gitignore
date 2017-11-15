@@ -34,3 +34,6 @@
 # bin
 *.S
 *.dump
+
+# specified lib files
+!/lib/*.a
