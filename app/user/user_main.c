@@ -50,6 +50,13 @@
 
 #define SOFTAP_IF       0x01
 
+#define ALARM_ON_FLASH_ADDRESS 0
+/*在flash中保存的定时开的首地址，在flash中保存着5组定时数据，
+每组4bytes，格式：时，分，秒，间隔,定时信息中的启用状态enable与小时合用一个字节，
+小时字节中的最高位保存启用状态：1-启用，0-关闭
+*/
+#define ALARM_OFF_FLASH_ADDRESS ALARM_ON_FLASH_ADDRESS + 40  //在flash中保存的定时关的首地址，在flash中保存着5组定时数据，每组3bytes，格式：时，分，秒
+
 #define ALARM_NUM     5    //最大定时组数量
 
 es_date_time es_now;         //当前时间
@@ -295,8 +302,48 @@ void GPIO_intr_init(void){
  *
 *******************************************************************************/
 void read_flash_alarm(void){
+	SpiFlashOpResult read_result;
+	unsigned int alarm_data[20];
+	int i;
+	//从flash读取定时开启数据
+	read_result=spi_flash_read(ALARM_ON_FLASH_ADDRESS,alarm_data,20);
+	if(read_result==SPI_FLASH_RESULT_OK){
+		//判断从flash读取的定时数据的有效性
+		for(i=0;i<5;i++){
+			if((alarm_data[i*4] & 0x7F)>23)   //小时字节中最高位为定时启用状态：1-启用，0-不启用
+				alarm_data[i*4]=0;
+			if(alarm_data[i*4+1]>59)
+				alarm_data[i*4+1]=0;
+			if(alarm_data[i*4+2]>59)
+				alarm_data[i*4+2]=0;
 
+			//更新定时数组
+			alarm_on[i].enable=alarm_data[i*4] & 0x80;
+			alarm_on[i].alarm_time.hour=alarm_data[i*4] & 0x7F;
+			alarm_on[i].alarm_time.minute=alarm_data[i*4+1];
+			alarm_on[i].alarm_time.second=alarm_data[i*4+2];
+			alarm_on[i].interval=alarm_data[i*4+3];
+		}
+	}
 
+	//从flash读取定时关数据
+	read_result=spi_flash_read(ALARM_OFF_FLASH_ADDRESS,alarm_data,16);
+	if(read_result==SPI_FLASH_RESULT_OK){
+		//判断从flash读取的定时数据的有效性
+		for(i=0;i<5;i++){
+			if(alarm_data[i*3]>23)
+				alarm_data[i*3]=0;
+			if(alarm_data[i*3+1]>59)
+				alarm_data[i*3+1]=0;
+			if(alarm_data[i*3+2]>59)
+				alarm_data[i*3+2]=0;
+
+			//更新定时数组
+			alarm_off[i].hour =alarm_data[i*3];
+			alarm_off[i].minute =alarm_data[i*3+1];
+			alarm_off[i].second =alarm_data[i*3+2];
+		}
+	}
 }
 
 /******************************************************************************
