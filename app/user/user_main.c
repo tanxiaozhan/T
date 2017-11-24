@@ -50,12 +50,15 @@
 
 #define SOFTAP_IF       0x01
 
-#define ALARM_ON_FLASH_ADDRESS 0
+#define ALARM_SECTOR 100
+//把定时数据保存到flash的第几扇区，每扇区4KB，flash读写必须4字节对齐
+
+#define ALARM_ON_FLASH_ADDRESS ALARM_SECTOR * 4 * 1024 + 0
 /*在flash中保存的定时开的首地址，在flash中保存着5组定时数据，
 每组4bytes，格式：时，分，秒，间隔,定时信息中的启用状态enable与小时合用一个字节，
 小时字节中的最高位保存启用状态：1-启用，0-关闭
 */
-#define ALARM_OFF_FLASH_ADDRESS ALARM_ON_FLASH_ADDRESS + 40  //在flash中保存的定时关的首地址，在flash中保存着5组定时数据，每组3bytes，格式：时，分，秒
+#define ALARM_OFF_FLASH_ADDRESS ALARM_ON_FLASH_ADDRESS + 40  //在flash中保存的定时关的首地址，在flash中保存着5组定时数据，每组4bytes，格式：时，分，秒，保留
 
 #define ALARM_NUM     5    //最大定时组数量
 
@@ -303,47 +306,90 @@ void GPIO_intr_init(void){
 *******************************************************************************/
 void read_flash_alarm(void){
 	SpiFlashOpResult read_result;
-	unsigned int alarm_data[20];
+	uint32 alarm_data[ALARM_NUM];
 	int i;
+	uint8 temp;
 	//从flash读取定时开启数据
-	read_result=spi_flash_read(ALARM_ON_FLASH_ADDRESS,alarm_data,20);
+	read_result=spi_flash_read(ALARM_ON_FLASH_ADDRESS, alarm_data, ALARM_NUM * 4);
 	if(read_result==SPI_FLASH_RESULT_OK){
 		//判断从flash读取的定时数据的有效性
 		for(i=0;i<5;i++){
-			if((alarm_data[i*4] & 0x7F)>23)   //小时字节中最高位为定时启用状态：1-启用，0-不启用
-				alarm_data[i*4]=0;
-			if(alarm_data[i*4+1]>59)
-				alarm_data[i*4+1]=0;
-			if(alarm_data[i*4+2]>59)
-				alarm_data[i*4+2]=0;
+			temp = (uint8)(alarm_data[i]>>24);
+			if((temp & 0x80)==0)
+				alarm_on[i].enable=0;
+			else
+				alarm_on[i].enable=1;
 
-			//更新定时数组
-			alarm_on[i].enable=alarm_data[i*4] & 0x80;
-			alarm_on[i].alarm_time.hour=alarm_data[i*4] & 0x7F;
-			alarm_on[i].alarm_time.minute=alarm_data[i*4+1];
-			alarm_on[i].alarm_time.second=alarm_data[i*4+2];
-			alarm_on[i].interval=alarm_data[i*4+3];
+			temp = temp & 0x7F;
+			if(temp<24)   //小时字节中最高位为定时启用状态：1-启用，0-不启用
+				alarm_on[i].alarm_time.hour=temp;
+
+			temp = (uint8)((alarm_data[i]>>16) & 0x000F);
+			if(temp<60)
+				alarm_on[i].alarm_time.minute=temp;
+
+			temp = (uint8)((alarm_data[i]>>8) & 0x000F);
+			if(temp<60)
+				alarm_on[i].alarm_time.second=temp;
+
+			alarm_on[i].interval=(uint8)(alarm_data[i] & 0x000F);
 		}
 	}
 
 	//从flash读取定时关数据
-	read_result=spi_flash_read(ALARM_OFF_FLASH_ADDRESS,alarm_data,16);
+	read_result=spi_flash_read(ALARM_OFF_FLASH_ADDRESS, alarm_data, ALARM_NUM * 4);
 	if(read_result==SPI_FLASH_RESULT_OK){
 		//判断从flash读取的定时数据的有效性
 		for(i=0;i<5;i++){
-			if(alarm_data[i*3]>23)
-				alarm_data[i*3]=0;
-			if(alarm_data[i*3+1]>59)
-				alarm_data[i*3+1]=0;
-			if(alarm_data[i*3+2]>59)
-				alarm_data[i*3+2]=0;
+			temp=(uint8)(alarm_data[i]>>24);
+			if(temp<24)
+				alarm_off[i].hour = temp;
 
-			//更新定时数组
-			alarm_off[i].hour =alarm_data[i*3];
-			alarm_off[i].minute =alarm_data[i*3+1];
-			alarm_off[i].second =alarm_data[i*3+2];
+			temp=(uint8)((alarm_data[i]>>16) & 0x000f);
+			if(temp<60)
+				alarm_off[i].minute = temp;
+
+			temp=(uint8)((alarm_data[i]>>8) & 0x000f);
+			if(temp<60)
+				alarm_off[i].second = temp;
 		}
 	}
+}
+
+
+/******************************************************************************
+ *
+ *把定时数据写入FLASH
+ *
+*******************************************************************************/
+void write_flash_alarm(void){
+	SpiFlashOpResult write_result;
+	uint32 alarm_data[ALARM_NUM];
+	int i;
+	write_result=spi_flash_erase_sector(ALARM_SECTOR);   //写数据前，须先删除
+	if(write_result != SPI_FLASH_RESULT_OK)
+		return;
+
+	for(i=0;i<5;i++){
+		if(alarm_on[i].enable)
+			alarm_data[i]=alarm_on[i].alarm_time.hour | 0x80;
+		else
+			alarm_data[i]=(uint32)(alarm_on[i].alarm_time.hour & 0x7F);
+		alarm_data[i]<<=24;
+
+		alarm_data[i] += (uint32)alarm_on[i].alarm_time.minute << 16 ;
+		alarm_data[i] += (uint32)alarm_on[i].alarm_time.second << 8 ;
+		alarm_data[i] += alarm_on[i].interval;
+	}
+	write_result=spi_flash_write(ALARM_ON_FLASH_ADDRESS,alarm_data,ALARM_NUM*4);
+
+	for(i=0;i<5;i++){
+		alarm_data[i] = (uint32)alarm_off[i].hour <<24 ;
+		alarm_data[i] += (uint32)alarm_off[i].minute << 16 ;
+		alarm_data[i] += (uint32)alarm_off[i].second << 8 ;
+	}
+	write_result=spi_flash_write(ALARM_OFF_FLASH_ADDRESS,alarm_data,ALARM_NUM*4);
+
 }
 
 /******************************************************************************

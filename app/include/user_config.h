@@ -67,6 +67,7 @@ void DS3231_read_date(void);
 void DS3231_write_date(void);
 
 void read_flash_alarm(void);
+void write_flash_alarm(void);
 void turn_on_off(uint8 control);        //设置GPIO4输出高/低电压，打开/关闭继电器
 
 void check_alarm(void);
