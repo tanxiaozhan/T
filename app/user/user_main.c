@@ -30,7 +30,7 @@
 
 #include "esp_libc.h"
 #include "user_config.h"
-#include "gpio.h"
+#include "../driver/gpio.h"
 
 
 // 中断GPIO脚定义，在此使用GPIO5
@@ -63,7 +63,7 @@
 #define ALARM_NUM     5    //最大定时组数量
 
 es_date_time es_now;         //当前时间
-alarm alarm_on[ALARM_NUM];       //五组定时
+alarm_time alarm_on[ALARM_NUM];       //五组定时
 es_time alarm_off[ALARM_NUM];
 uint8 interval[ALARM_NUM];      //定时器间重复隔天数，0-每天重复，1-每二天重复
 

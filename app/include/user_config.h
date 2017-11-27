@@ -53,7 +53,7 @@ typedef struct {
 	bool enable;      //闹钟状态，true-开启
 	es_time alarm_time;
 	unsigned int interval;   //重复间隔天数，0-每天一次
-} alarm;
+} alarm_time;
 
 
 void GPIO_intr_init(void);   //初始化中断端口
