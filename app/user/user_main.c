@@ -30,7 +30,7 @@
 
 #include "esp_libc.h"
 #include "user_config.h"
-#include "../driver/gpio.h"
+#include "../include/gpio.h"
 
 
 // 中断GPIO脚定义，在此使用GPIO5
