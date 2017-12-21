@@ -324,15 +324,15 @@ void read_flash_alarm(void){
 			if(temp<24)   //小时字节中最高位为定时启用状态：1-启用，0-不启用
 				alarm_on[i].alarm_time.hour=temp;
 
-			temp = (uint8)((alarm_data[i]>>16) & 0x000F);
+			temp = (uint8)((alarm_data[i]>>16) & 0x00000000FF);
 			if(temp<60)
 				alarm_on[i].alarm_time.minute=temp;
 
-			temp = (uint8)((alarm_data[i]>>8) & 0x000F);
+			temp = (uint8)((alarm_data[i]>>8) & 0x00000000FF);
 			if(temp<60)
 				alarm_on[i].alarm_time.second=temp;
 
-			alarm_on[i].interval=(uint8)(alarm_data[i] & 0x000F);
+			alarm_on[i].interval=(uint8)(alarm_data[i] & 0x00000000FF);
 		}
 	}
 
@@ -345,11 +345,11 @@ void read_flash_alarm(void){
 			if(temp<24)
 				alarm_off[i].hour = temp;
 
-			temp=(uint8)((alarm_data[i]>>16) & 0x000f);
+			temp=(uint8)((alarm_data[i]>>16) & 0x00000000FF);
 			if(temp<60)
 				alarm_off[i].minute = temp;
 
-			temp=(uint8)((alarm_data[i]>>8) & 0x000f);
+			temp=(uint8)((alarm_data[i]>>8) & 0x00000000FF);
 			if(temp<60)
 				alarm_off[i].second = temp;
 		}
@@ -377,16 +377,16 @@ void write_flash_alarm(void){
 			alarm_data[i]=(uint32)(alarm_on[i].alarm_time.hour & 0x7F);
 		alarm_data[i]<<=24;
 
-		alarm_data[i] += (uint32)alarm_on[i].alarm_time.minute << 16 ;
-		alarm_data[i] += (uint32)alarm_on[i].alarm_time.second << 8 ;
-		alarm_data[i] += alarm_on[i].interval;
+		alarm_data[i] |= (uint32)alarm_on[i].alarm_time.minute << 16 ;
+		alarm_data[i] |= (uint32)alarm_on[i].alarm_time.second << 8 ;
+		alarm_data[i] |= alarm_on[i].interval;
 	}
 	write_result=spi_flash_write(ALARM_ON_FLASH_ADDRESS,alarm_data,ALARM_NUM*4);
 
 	for(i=0;i<5;i++){
 		alarm_data[i] = (uint32)alarm_off[i].hour <<24 ;
-		alarm_data[i] += (uint32)alarm_off[i].minute << 16 ;
-		alarm_data[i] += (uint32)alarm_off[i].second << 8 ;
+		alarm_data[i] |= (uint32)alarm_off[i].minute << 16 ;
+		alarm_data[i] |= (uint32)alarm_off[i].second << 8 ;
 	}
 	write_result=spi_flash_write(ALARM_OFF_FLASH_ADDRESS,alarm_data,ALARM_NUM*4);
 
